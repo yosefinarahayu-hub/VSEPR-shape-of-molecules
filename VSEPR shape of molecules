@@ -1,0 +1,1092 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MoleculeQuest — VSEPR Explorer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Orbitron:wght@700;900&display=swap');
+
+:root {
+  --bg:#1a1f3e; --card:#252d52; --border:rgba(130,145,255,0.25);
+  --purple:#6366f1; --cyan:#22d3ee; --green:#4ade80; --yellow:#fbbf24;
+  --pink:#f472b6; --orange:#fb923c; --red:#f87171;
+  --text:#e2e8f0; --dim:#94a3b8; --correct:#4ade80; --wrong:#f87171;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{background:var(--bg);color:var(--text);font-family:'Nunito',sans-serif;min-height:100vh;overflow-x:hidden;}
+
+/* BG PARTICLES */
+#bgCanvas{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;opacity:0.35;}
+
+/* HERO */
+.hero{position:relative;z-index:1;text-align:center;padding:2.2rem 2rem 0.8rem;}
+.hero-badge{display:inline-block;background:linear-gradient(135deg,rgba(99,102,241,0.25),rgba(34,211,238,0.25));border:1px solid rgba(99,102,241,0.4);color:var(--cyan);font-size:0.7rem;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;padding:0.28rem 0.9rem;border-radius:20px;margin-bottom:0.7rem;}
+.hero h1{font-family:'Orbitron',sans-serif;font-size:clamp(1.7rem,4.5vw,3rem);font-weight:900;background:linear-gradient(135deg,#818cf8,#22d3ee,#f472b6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1.15;margin-bottom:0.4rem;}
+.hero p{color:var(--dim);font-size:0.95rem;font-weight:600;}
+
+
+
+/* NAV */
+.nav{position:sticky;top:0;z-index:100;background:rgba(26,31,62,0.96);backdrop-filter:blur(14px);border-bottom:1px solid var(--border);display:flex;justify-content:center;gap:.35rem;padding:.7rem 1rem;}
+.nav-btn{font-family:'Nunito',sans-serif;font-weight:800;font-size:.8rem;padding:.5rem 1.1rem;border-radius:50px;border:2px solid transparent;cursor:pointer;transition:all .22s;background:rgba(255,255,255,0.04);color:var(--dim);display:flex;align-items:center;gap:.35rem;}
+.nav-btn:hover{color:var(--text);background:rgba(99,102,241,0.12);border-color:rgba(99,102,241,0.35);}
+.nav-btn.active{background:linear-gradient(135deg,var(--purple),#4f46e5);color:#fff;box-shadow:0 4px 18px rgba(99,102,241,0.45);}
+.nav-num{font-size:.6rem;background:rgba(255,255,255,0.18);padding:.08rem .38rem;border-radius:10px;}
+
+/* SECTIONS */
+.section{display:none;position:relative;z-index:1;max-width:1160px;margin:0 auto;padding:1.8rem 1.4rem 4rem;}
+.section.active{display:block;}
+.sec-title{font-family:'Orbitron',sans-serif;font-size:1.05rem;font-weight:900;color:var(--cyan);display:flex;align-items:center;gap:.55rem;margin-bottom:.35rem;}
+.sec-desc{color:var(--dim);font-size:.88rem;margin-bottom:1.8rem;font-weight:600;}
+
+/* ═══ SECTION 1: SHAPE CARDS ═══ */
+.shapes-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:1.1rem;}
+@media(max-width:1000px){.shapes-grid{grid-template-columns:repeat(3,1fr);}}
+@media(max-width:650px){.shapes-grid{grid-template-columns:repeat(2,1fr);}}
+@media(max-width:420px){.shapes-grid{grid-template-columns:1fr;}}
+
+.shape-card{background:var(--card);border:1.5px solid var(--border);border-radius:16px;overflow:hidden;cursor:pointer;transition:transform .25s,box-shadow .25s,border-color .25s;}
+.shape-card:hover{transform:translateY(-5px) scale(1.02);box-shadow:0 10px 35px rgba(99,102,241,0.28);border-color:var(--purple);}
+.shape-card.expanded{border-color:var(--cyan)!important;box-shadow:0 10px 45px rgba(34,211,238,0.22);}
+
+/* Each card has its own canvas container — fixed pixel height, NO CSS width/height override on canvas */
+.card-cvs-wrap{width:100%;height:160px;position:relative;overflow:hidden;background:radial-gradient(ellipse at 50% 60%,rgba(99,102,241,0.1) 0%,transparent 70%);}
+
+.card-body{padding:.85rem 1rem 1rem;}
+.card-name{font-family:'Orbitron',sans-serif;font-size:.78rem;font-weight:700;color:#fff;margin-bottom:.3rem;}
+.card-badges{display:flex;flex-wrap:wrap;gap:.3rem;margin-bottom:.6rem;}
+.badge{font-size:.67rem;font-weight:800;padding:.13rem .5rem;border-radius:20px;}
+.badge-formula{background:rgba(99,102,241,.2);border:1px solid rgba(99,102,241,.35);color:var(--purple);}
+.badge-angle{background:rgba(34,211,238,.15);border:1px solid rgba(34,211,238,.28);color:var(--cyan);}
+.card-desc{font-size:.78rem;color:var(--dim);line-height:1.5;font-weight:600;}
+.card-eg{margin-top:.45rem;font-size:.73rem;color:var(--yellow);font-weight:700;}
+
+/* ═══ SECTION 2: MOLECULE VIEWER ═══ */
+.mol-wrap{display:grid;grid-template-columns:1fr 295px;gap:1.4rem;align-items:start;}
+@media(max-width:760px){.mol-wrap{grid-template-columns:1fr;}}
+.mol-pills{display:flex;flex-wrap:wrap;gap:.45rem;margin-bottom:.9rem;}
+.mol-pill{font-family:'Orbitron',sans-serif;font-size:.66rem;font-weight:700;padding:.38rem .85rem;border-radius:30px;border:2px solid var(--border);background:transparent;color:var(--dim);cursor:pointer;transition:all .2s;}
+.mol-pill:hover{border-color:var(--purple);color:var(--purple);}
+.mol-pill.active{background:var(--purple);color:#fff;border-color:var(--purple);box-shadow:0 3px 14px rgba(99,102,241,.38);}
+.viewer-box{background:var(--card);border:1.5px solid var(--border);border-radius:18px;overflow:hidden;height:420px;position:relative;}
+#molCanvas{display:block;width:100%!important;height:100%!important;}
+.viewer-hint{position:absolute;bottom:.8rem;left:50%;transform:translateX(-50%);background:rgba(5,7,26,.72);backdrop-filter:blur(8px);border:1px solid var(--border);border-radius:20px;padding:.3rem .9rem;font-size:.7rem;color:var(--dim);font-weight:700;white-space:nowrap;}
+
+.info-stack{display:flex;flex-direction:column;gap:.75rem;}
+.i-tile{background:var(--card);border:1.5px solid var(--border);border-radius:13px;padding:.9rem 1.1rem;}
+.i-label{font-size:.65rem;font-weight:800;text-transform:uppercase;letter-spacing:.09em;color:var(--dim);margin-bottom:.25rem;}
+.i-val{font-size:.88rem;font-weight:700;color:var(--text);line-height:1.4;}
+.i-val.name-val{font-family:'Orbitron',sans-serif;font-size:.95rem;color:var(--cyan);}
+.i-grid{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;}
+.reveal-tile{background:var(--card);border:2px dashed rgba(99,102,241,.3);border-radius:13px;padding:.9rem 1.1rem;cursor:pointer;transition:all .22s;}
+.reveal-tile:hover{border-color:var(--purple);background:rgba(99,102,241,.07);}
+.reveal-tile.shown{border-style:solid;border-color:var(--purple);background:rgba(99,102,241,.09);cursor:default;}
+.r-label{font-size:.65rem;font-weight:800;text-transform:uppercase;letter-spacing:.09em;color:var(--purple);margin-bottom:.25rem;}
+.r-val{font-size:.8rem;font-weight:700;color:var(--dim);line-height:1.5;}
+.reveal-tile.shown .r-val{color:var(--text);}
+.r-hint{font-size:.7rem;color:var(--purple);font-weight:700;margin-top:.2rem;}
+.reveal-tile.shown .r-hint{display:none;}
+
+/* ═══ SECTION 3: QUIZ ═══ */
+.quiz-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:.9rem;margin-bottom:1.8rem;}
+.sbox{background:var(--card);border:1.5px solid var(--border);border-radius:13px;padding:.9rem;text-align:center;}
+.snum{font-family:'Orbitron',sans-serif;font-size:1.5rem;font-weight:900;}
+.snum.gold{color:var(--yellow);text-shadow:0 0 12px rgba(251,191,36,.45);}
+.snum.cyan{color:var(--cyan);text-shadow:0 0 12px rgba(34,211,238,.45);}
+.snum.pink{color:var(--pink);text-shadow:0 0 12px rgba(244,114,182,.45);}
+.slabel{font-size:.68rem;color:var(--dim);font-weight:700;margin-top:.18rem;text-transform:uppercase;letter-spacing:.07em;}
+.prog-pills{display:flex;gap:.35rem;flex-wrap:wrap;margin-bottom:1.4rem;}
+.ppill{width:26px;height:7px;border-radius:4px;background:rgba(255,255,255,0.07);transition:all .3s;}
+.ppill.c{background:var(--correct);box-shadow:0 0 5px rgba(74,222,128,.4);}
+.ppill.w{background:var(--wrong);}
+
+.q-card{background:var(--card);border:2px solid var(--border);border-radius:18px;padding:1.6rem;margin-bottom:1.2rem;transition:border-color .3s,box-shadow .3s;animation:slideUp .35s ease both;}
+@keyframes slideUp{from{opacity:0;transform:translateY(16px);}to{opacity:1;transform:translateY(0);}}
+.q-card.correct{border-color:var(--correct);box-shadow:0 0 28px rgba(74,222,128,.13);}
+.q-card.wrong{border-color:var(--wrong);box-shadow:0 0 22px rgba(248,113,113,.09);}
+.q-header{display:flex;align-items:center;gap:.7rem;margin-bottom:.9rem;}
+.q-badge{font-family:'Orbitron',sans-serif;font-size:.62rem;font-weight:900;background:linear-gradient(135deg,var(--purple),var(--cyan));color:#fff;padding:.22rem .55rem;border-radius:20px;}
+.q-mol{font-family:'Orbitron',sans-serif;font-size:.82rem;font-weight:900;color:var(--cyan);background:rgba(34,211,238,.1);border:1px solid rgba(34,211,238,.28);padding:.18rem .62rem;border-radius:7px;}
+.q-text{font-size:.92rem;font-weight:700;color:var(--text);margin-bottom:1.1rem;line-height:1.5;}
+.opts{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;}
+@media(max-width:500px){.opts{grid-template-columns:1fr;}}
+.opt{display:flex;align-items:center;gap:.68rem;background:rgba(255,255,255,.04);border:2px solid rgba(255,255,255,.08);border-radius:11px;padding:.7rem .9rem;cursor:pointer;transition:all .18s;font-size:.86rem;font-weight:700;text-align:left;color:var(--text);font-family:'Nunito',sans-serif;}
+.opt:hover:not(:disabled){border-color:var(--purple);background:rgba(99,102,241,.08);transform:scale(1.015);}
+.opt:disabled{cursor:default;}
+.opt.correct{background:rgba(74,222,128,.12);border-color:var(--correct);color:var(--correct);}
+.opt.wrong{background:rgba(248,113,113,.08);border-color:var(--wrong);color:var(--wrong);}
+.opt.reveal{background:rgba(74,222,128,.05);border-color:rgba(74,222,128,.35);color:rgba(74,222,128,.65);}
+.opt-ltr{font-family:'Orbitron',sans-serif;font-size:.62rem;font-weight:900;min-width:21px;height:21px;border-radius:5px;background:rgba(255,255,255,.09);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.q-fb{margin-top:.9rem;border-radius:9px;padding:.75rem .9rem;font-size:.83rem;font-weight:700;display:none;line-height:1.5;}
+.q-fb.show{display:block;animation:fadeIn .3s ease;}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.q-fb.correct{background:rgba(74,222,128,.09);color:#86efac;border:1px solid rgba(74,222,128,.28);}
+.q-fb.wrong{background:rgba(248,113,113,.07);color:#fca5a5;border:1px solid rgba(248,113,113,.22);}
+
+/* FINAL SCREEN */
+.final-scr{display:none;text-align:center;background:var(--card);border:2px solid var(--purple);border-radius:22px;padding:2.6rem 2rem;margin-bottom:1.8rem;position:relative;overflow:hidden;}
+.final-scr.show{display:block;animation:popIn .45s cubic-bezier(.68,-.55,.27,1.55) both;}
+@keyframes popIn{from{opacity:0;transform:scale(.82)}to{opacity:1;transform:scale(1)}}
+.final-scr::before{content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:conic-gradient(from 0deg,rgba(99,102,241,.09),rgba(34,211,238,.09),rgba(244,114,182,.09),rgba(99,102,241,.09));animation:rot 7s linear infinite;pointer-events:none;}
+@keyframes rot{to{transform:rotate(360deg)}}
+.final-score{font-family:'Orbitron',sans-serif;font-size:3.6rem;font-weight:900;background:linear-gradient(135deg,var(--yellow),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;position:relative;z-index:1;filter:drop-shadow(0 0 25px rgba(251,191,36,.45));}
+.final-title{font-family:'Orbitron',sans-serif;font-size:1.2rem;font-weight:900;color:#fff;margin:.4rem 0;position:relative;z-index:1;}
+.final-msg{color:var(--dim);font-weight:700;position:relative;z-index:1;margin-bottom:1.4rem;}
+.stars{font-size:1.8rem;margin:.4rem 0;position:relative;z-index:1;}
+.btn-main{font-family:'Orbitron',sans-serif;font-size:.72rem;font-weight:700;background:linear-gradient(135deg,var(--purple),#4f46e5);color:#fff;border:none;padding:.75rem 1.8rem;border-radius:50px;cursor:pointer;transition:all .2s;letter-spacing:.07em;text-transform:uppercase;box-shadow:0 4px 18px rgba(99,102,241,.38);position:relative;z-index:1;}
+.btn-main:hover{transform:translateY(-2px);box-shadow:0 7px 26px rgba(99,102,241,.48);}
+.reset-wrap{text-align:center;margin-top:1.3rem;}
+
+/* CONFETTI */
+.cfp{position:fixed;pointer-events:none;z-index:9999;animation:cffall linear forwards;}
+@keyframes cffall{0%{opacity:1;transform:translateY(-10px) rotate(0deg);}100%{opacity:0;transform:translateY(105vh) rotate(700deg);}}
+
+/* QUIZ 3D VIEWER */
+.view3d-btn{margin-top:.9rem;display:flex;align-items:center;gap:.5rem;font-family:'Orbitron',sans-serif;font-size:.68rem;font-weight:700;letter-spacing:.06em;padding:.55rem 1.2rem;border-radius:30px;border:2px solid var(--cyan);background:rgba(34,211,238,.08);color:var(--cyan);cursor:pointer;transition:all .2s;width:fit-content;}
+.view3d-btn:hover{background:rgba(34,211,238,.18);box-shadow:0 0 16px rgba(34,211,238,.3);}
+.view3d-btn.open{background:rgba(34,211,238,.18);border-color:var(--cyan);}
+
+.q-viewer-wrap{overflow:hidden;max-height:0;transition:max-height .45s cubic-bezier(.4,0,.2,1),opacity .35s ease;opacity:0;}
+.q-viewer-wrap.open{max-height:340px;opacity:1;}
+.q-viewer-inner{margin-top:.9rem;border-radius:14px;overflow:hidden;height:280px;background:var(--bg);border:1px solid var(--border);position:relative;}
+.q-viewer-inner canvas{width:100%!important;height:100%!important;display:block;}
+.q-viewer-hint{position:absolute;bottom:.6rem;left:50%;transform:translateX(-50%);background:rgba(26,31,62,.8);backdrop-filter:blur(6px);border:1px solid var(--border);border-radius:20px;padding:.25rem .8rem;font-size:.65rem;color:var(--dim);font-weight:700;white-space:nowrap;pointer-events:none;}
+
+</style>
+</head>
+<body>
+
+<canvas id="bgCanvas"></canvas>
+
+<!-- HERO -->
+<header class="hero">
+  <div class="hero-badge">🔬 Chemistry Lab · VSEPR Theory</div>
+  <h1>MoleculeQuest</h1>
+  <p>Explore 3D shapes · Master VSEPR theory!</p>
+</header>
+
+<!-- NAV -->
+<nav class="nav">
+  <button class="nav-btn active" onclick="showTab('intro',this)">🔷 Shapes <span class="nav-num">01</span></button>
+  <button class="nav-btn" onclick="showTab('molecules',this)">⚛️ 3D Lab <span class="nav-num">02</span></button>
+  <button class="nav-btn" onclick="showTab('assessment',this)">🎯 Quiz <span class="nav-num">03</span></button>
+</nav>
+
+<!-- ══ SECTION 1: INTRO ══ -->
+<section id="intro" class="section active">
+  <div class="sec-title">🔷 Basic Molecular Shapes</div>
+  <p class="sec-desc">Click a card to expand · A = central atom · Y = bonding pair · E = lone pair · Molecules rotate automatically</p>
+  <div class="shapes-grid" id="shapesGrid"></div>
+</section>
+
+<!-- ══ SECTION 2: MOLECULES ══ -->
+<section id="molecules" class="section">
+  <div class="sec-title">⚛️ 3D Molecule Lab</div>
+  <p class="sec-desc">Drag to spin 360° · Scroll to zoom · Tap glowing tiles to reveal details</p>
+  <div class="mol-pills" id="molPills"></div>
+  <div class="mol-wrap">
+    <div>
+      <div class="viewer-box">
+        <canvas id="molCanvas"></canvas>
+        <div class="viewer-hint">⟳ Drag to rotate · Scroll to zoom</div>
+      </div>
+    </div>
+    <div class="info-stack">
+      <div class="i-tile"><div class="i-label">Molecule</div><div class="i-val name-val" id="iName">—</div></div>
+      <div class="i-tile i-grid">
+        <div><div class="i-label">Shape</div><div class="i-val" id="iShape">—</div></div>
+        <div><div class="i-label">Bond Angle</div><div class="i-val" id="iAngle">—</div></div>
+      </div>
+      <div class="i-tile i-grid">
+        <div><div class="i-label">Lone Pairs on A</div><div class="i-val" id="iLone">—</div></div>
+        <div><div class="i-label">Total e⁻ pairs</div><div class="i-val" id="iTotal">—</div></div>
+      </div>
+      <div class="reveal-tile" id="dipTile" onclick="revealTile('dip')">
+        <div class="r-label">🎯 Bond Dipoles</div>
+        <div class="r-val" id="iDip">Tap to reveal!</div>
+        <div class="r-hint">👆 Click to unlock</div>
+      </div>
+      <div class="reveal-tile" id="polTile" onclick="revealTile('pol')">
+        <div class="r-label">⚡ Overall Polarity</div>
+        <div class="r-val" id="iPol">Tap to reveal!</div>
+        <div class="r-hint">👆 Click to unlock</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ SECTION 3: QUIZ ══ -->
+<section id="assessment" class="section">
+  <div class="sec-title">🎯 VSEPR Challenge</div>
+  <p class="sec-desc">Predict shapes and angles for analogous molecules · 8 multiple choice questions</p>
+  <div class="quiz-stats">
+    <div class="sbox"><div class="snum gold" id="sScore">0</div><div class="slabel">⭐ Score</div></div>
+    <div class="sbox"><div class="snum cyan" id="sAns">0/8</div><div class="slabel">✅ Answered</div></div>
+  </div>
+  <div class="prog-pills" id="progPills"></div>
+  <div class="final-scr" id="finalScr"></div>
+  <div id="quizBox"></div>
+  <div class="reset-wrap"><button class="btn-main" onclick="resetQuiz()">↺ &nbsp;Reset Quiz</button></div>
+</section>
+
+<script>
+'use strict';
+// ══════════════════════════════════════════
+// PARTICLE BACKGROUND
+// ══════════════════════════════════════════
+(function(){
+  const c=document.getElementById('bgCanvas'),x=c.getContext('2d');
+  let W,H;
+  const ps=Array.from({length:55},()=>({
+    x:Math.random()*2000,y:Math.random()*1200,
+    vx:(Math.random()-.5)*.28,vy:(Math.random()-.5)*.28,
+    r:Math.random()*1.4+.4,h:Math.random()>.5?240:190
+  }));
+  function resize(){W=c.width=window.innerWidth;H=c.height=window.innerHeight;}
+  resize(); window.addEventListener('resize',resize);
+  function loop(){
+    x.clearRect(0,0,W,H);
+    ps.forEach(p=>{
+      p.x=(p.x+p.vx+W)%W; p.y=(p.y+p.vy+H)%H;
+      x.beginPath();x.arc(p.x,p.y,p.r,0,Math.PI*2);
+      x.fillStyle=`hsla(${p.h},75%,68%,.65)`;x.fill();
+    });
+    for(let i=0;i<ps.length;i++) for(let j=i+1;j<ps.length;j++){
+      const dx=ps[i].x-ps[j].x,dy=ps[i].y-ps[j].y,d=Math.sqrt(dx*dx+dy*dy);
+      if(d<90){x.beginPath();x.moveTo(ps[i].x,ps[i].y);x.lineTo(ps[j].x,ps[j].y);
+        x.strokeStyle=`rgba(99,102,241,${.13*(1-d/90)})`;x.lineWidth=.5;x.stroke();}
+    }
+    requestAnimationFrame(loop);
+  }
+  loop();
+})();
+
+// ══════════════════════════════════════════
+// TAB SWITCHING
+// ══════════════════════════════════════════
+function showTab(id,btn){
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  btn.classList.add('active');
+  if(id==='molecules'&&!molReady) initMolViewer();
+}
+
+// ══════════════════════════════════════════
+// DATA
+// ══════════════════════════════════════════
+// INTRO — 5 base shapes, 2 examples each
+const INTRO=[
+  {name:'Linear',formula:'AY₂',angle:'180°',
+   desc:'2 bonding pairs, 0 lone pairs. All atoms lie in a perfectly straight line.',
+   eg:'CO₂, CS₂',color:'#22d3ee',
+   atoms:[[0,0,0],[2.2,0,0],[-2.2,0,0]]},
+  {name:'Trigonal Planar',formula:'AY₃',angle:'120°',
+   desc:'3 bonding pairs, 0 lone pairs. All atoms in the same plane, symmetrically arranged.',
+   eg:'BF₃, SO₃',color:'#a78bfa',
+   atoms:[[0,0,0],[2,0,0],[-1,1.73,0],[-1,-1.73,0]]},
+  {name:'Tetrahedral',formula:'AY₄',angle:'109.5°',
+   desc:'4 bonding pairs, 0 lone pairs. Perfectly symmetric in 3D space.',
+   eg:'CH₄, CCl₄',color:'#4ade80',
+   atoms:[[0,0,0],[1.5,1.5,-1.06],[1.5,-1.5,1.06],[-1.5,1.5,1.06],[-1.5,-1.5,-1.06]]},
+  {name:'Trig. Bipyramidal',formula:'AY₅',angle:'120° / 90°',
+   desc:'5 bonding pairs, 0 lone pairs. Two distinct positions — equatorial (120°) and axial (90°).',
+   eg:'PF₅, PCl₅',color:'#f472b6',
+   // 3 equatorial in XZ plane at 120°, 2 axial along Y axis
+   atoms:[[0,0,0],[2,0,0],[-1,0,1.73],[-1,0,-1.73],[0,2.2,0],[0,-2.2,0]]},
+  {name:'Octahedral',formula:'AY₆',angle:'90°',
+   desc:'6 bonding pairs, 0 lone pairs. All bond angles 90°, perfectly symmetric in 3D.',
+   eg:'SF₆, PCl₆⁻',color:'#06b6d4',
+   atoms:[[0,0,0],[2,0,0],[-2,0,0],[0,2,0],[0,-2,0],[0,0,2],[0,0,-2]]}
+];
+
+// SECTION 2 MOLECULES
+const MOLS=[
+  {id:'BF3',lbl:'BF₃',name:'Boron Trifluoride',shape:'Trigonal Planar',angle:'120°',lone:0,total:3,
+   dip:'B–F bonds are polar (F is more electronegative than B)',
+   pol:'Non-polar — 3 dipoles are arranged symmetrically and cancel out',
+   c:['#a78bfa','#22d3ee'],geom:'trigonal_planar'},
+  {id:'CO2',lbl:'CO₂',name:'Carbon Dioxide',shape:'Linear',angle:'180°',lone:0,total:2,
+   dip:'C=O bonds are polar (O is more electronegative than C)',
+   pol:'Non-polar — two equal, opposite dipoles cancel exactly',
+   c:['#f87171','#94a3b8'],geom:'linear'},
+  {id:'CH4',lbl:'CH₄',name:'Methane',shape:'Tetrahedral',angle:'109.5°',lone:0,total:4,
+   dip:'C–H bonds are very slightly polar',
+   pol:'Non-polar — perfect tetrahedral symmetry, all dipoles cancel',
+   c:['#4ade80','#f1f5f9'],geom:'tetrahedral'},
+  {id:'NH3',lbl:'NH₃',name:'Ammonia',shape:'Trig. Pyramidal',angle:'107°',lone:1,total:4,
+   dip:'N–H bonds are polar (N is more electronegative)',
+   pol:'Polar — lone pair creates asymmetry; net dipole toward N',
+   c:['#818cf8','#f1f5f9'],geom:'trig_pyramidal'},
+  {id:'H2O',lbl:'H₂O',name:'Water',shape:'Bent (Non-linear)',angle:'104.5°',lone:2,total:4,
+   dip:'O–H bonds are strongly polar (O is highly electronegative)',
+   pol:'Polar — two lone pairs create large asymmetry; strong net dipole',
+   c:['#fbbf24','#f1f5f9'],geom:'bent'},
+  {id:'SF6',lbl:'SF₆',name:'Sulfur Hexafluoride',shape:'Octahedral',angle:'90°',lone:0,total:6,
+   dip:'S–F bonds are polar (F is the most electronegative element)',
+   pol:'Non-polar — perfect octahedral symmetry, all 6 dipoles cancel',
+   c:['#fbbf24','#22d3ee'],geom:'octahedral'},
+  {id:'PF5',lbl:'PF₅',name:'Phosphorus Pentafluoride',shape:'Trig. Bipyramidal',angle:'120° / 90°',lone:0,total:5,
+   dip:'P–F bonds are polar (F more electronegative than P)',
+   pol:'Non-polar — symmetric trig. bipyramidal, dipoles cancel overall',
+   c:['#f472b6','#22d3ee'],geom:'trig_bipyramidal'}
+];
+
+// Atom positions for the main viewer
+const GPOS={
+  linear:        [[2.1,0,0],[-2.1,0,0]],
+  trigonal_planar:[[2,0,0],[-1,1.73,0],[-1,-1.73,0]],
+  tetrahedral:   [[1.5,1.5,-1.06],[1.5,-1.5,1.06],[-1.5,1.5,1.06],[-1.5,-1.5,-1.06]],
+  // trig_pyramidal: 3 bonds spread equatorially downward, lone pair goes up (+Y)
+  trig_pyramidal:[[1.8,-1.0,0],[-0.9,-1.0,1.56],[-0.9,-1.0,-1.56]],
+  bent:          [[1.45,1.15,0],[-1.45,1.15,0]],
+  octahedral:    [[2,0,0],[-2,0,0],[0,2,0],[0,-2,0],[0,0,2],[0,0,-2]],
+  // 3 equatorial in XZ plane at 120°, 2 axial along ±Y
+  trig_bipyramidal:[[2,0,0],[-1,0,1.73],[-1,0,-1.73],[0,2.2,0],[0,-2.2,0]],
+  square_planar: [[2,0,0],[-2,0,0],[0,0,2],[0,0,-2]]
+};
+const LONE_POS={
+  trig_pyramidal:[[0,1.7,0]],
+  bent:          [[0,-1.65,0],[0,-1.5,1.1]],
+  square_planar: [[0,2,0],[0,-2,0]]
+};
+
+// ══════════════════════════════════════════
+// SECTION 1: BUILD INTRO SHAPE CARDS
+// Uses a proper deferred init via MutationObserver / setTimeout so
+// clientWidth is valid by the time the renderer is created.
+// ══════════════════════════════════════════
+const miniData=[]; // {renderer, scene, camera}
+let miniAngle=0;
+
+function buildIntroCards(){
+  const grid=document.getElementById('shapesGrid');
+  INTRO.forEach((s,i)=>{
+    const card=document.createElement('div');
+    card.className='shape-card';
+    card.innerHTML=`
+      <div style="height:3px;background:linear-gradient(90deg,${s.color}88,transparent);"></div>
+      <div class="card-cvs-wrap" id="cvs${i}"></div>
+      <div class="card-body">
+        <div class="card-name">${s.name}</div>
+        <div class="card-badges">
+          <span class="badge badge-formula">${s.formula}</span>
+          <span class="badge badge-angle">${s.angle}</span>
+        </div>
+        <div class="card-desc">${s.desc}</div>
+        <div class="card-eg">📌 ${s.eg}</div>
+      </div>`;
+    card.addEventListener('click',()=>{
+      card.classList.toggle('expanded');
+    });
+    grid.appendChild(card);
+  });
+
+  // Wait for layout paint before measuring clientWidth
+  setTimeout(()=>{
+    INTRO.forEach((s,i)=>{
+      const wrap=document.getElementById('cvs'+i);
+      if(!wrap) return;
+      const W=wrap.clientWidth||230;
+      const H=160;
+
+      const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
+      renderer.setSize(W,H);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+      // Do NOT let CSS resize the canvas — clear any conflicting rules
+      renderer.domElement.style.width=W+'px';
+      renderer.domElement.style.height=H+'px';
+      wrap.appendChild(renderer.domElement);
+
+      const scene=new THREE.Scene();
+      const camera=new THREE.PerspectiveCamera(42, W/H, 0.1, 100);
+      camera.position.set(0,1.5,7);
+      camera.lookAt(0,0,0);
+
+      scene.add(new THREE.AmbientLight(0xffffff,0.55));
+      const dl=new THREE.DirectionalLight(0xffffff,0.95);
+      dl.position.set(4,5,5); scene.add(dl);
+      const dl2=new THREE.DirectionalLight(0x6366f1,0.3);
+      dl2.position.set(-4,-3,-4); scene.add(dl2);
+
+      const colHex=parseInt(s.color.replace('#',''),16);
+
+      // Central atom
+      const cMesh=new THREE.Mesh(
+        new THREE.SphereGeometry(0.42,32,32),
+        new THREE.MeshPhongMaterial({color:colHex,emissive:colHex,emissiveIntensity:0.22,shininess:90})
+      );
+      cMesh.position.set(...s.atoms[0]);
+      scene.add(cMesh);
+
+      // Outer atoms + bonds + angle arcs
+      for(let j=1;j<s.atoms.length;j++){
+        const oMesh=new THREE.Mesh(
+          new THREE.SphereGeometry(0.3,32,32),
+          new THREE.MeshPhongMaterial({color:0xbfdbfe,emissive:0x3b82f6,emissiveIntensity:0.06,shininess:60})
+        );
+        oMesh.position.set(...s.atoms[j]);
+        scene.add(oMesh);
+
+        const cPos=new THREE.Vector3(...s.atoms[0]);
+        const oPos=new THREE.Vector3(...s.atoms[j]);
+        const dir=oPos.clone().sub(cPos);
+        const len=dir.length();
+        const bondMesh=new THREE.Mesh(
+          new THREE.CylinderGeometry(0.065,0.065,len,12),
+          new THREE.MeshPhongMaterial({color:0x374151,shininess:30})
+        );
+        bondMesh.position.copy(cPos.clone().add(oPos).multiplyScalar(0.5));
+        bondMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),dir.clone().normalize());
+        scene.add(bondMesh);
+      }
+
+      // Mini angle arcs — thick tube + bold label for one representative arc
+      const miniAngleArcs={
+        'Linear':         {pairs:[[1,2]], label:'180°', col:'#22d3ee'},
+        'Trigonal Planar':{pairs:[[1,2]], label:'120°', col:'#c084fc'},
+        'Tetrahedral':    {pairs:[[1,2]], label:'109.5°',col:'#4ade80'},
+        'Trig. Bipyramidal':{pairs:[[1,2],[1,4]], label:['120°','90°'], col:['#f472b6','#22d3ee']},
+        'Octahedral':     {pairs:[[1,2]], label:'90°', col:'#22d3ee'}
+      };
+      const ma=miniAngleArcs[s.name];
+      if(ma){
+        const pairs=ma.pairs;
+        const labels=Array.isArray(ma.label)?ma.label:[ma.label];
+        const cols=Array.isArray(ma.col)?ma.col:[ma.col];
+        pairs.forEach((pair,pi)=>{
+          const [ai,bi]=pair;
+          if(ai>=s.atoms.length||bi>=s.atoms.length) return;
+          const vA2=new THREE.Vector3(...s.atoms[ai]).normalize();
+          const vB2=new THREE.Vector3(...s.atoms[bi]).normalize();
+          const ax2=vA2.clone().cross(vB2);
+          if(ax2.lengthSq()<1e-6) ax2.set(0,1,0);
+          ax2.normalize();
+          const ang2=vA2.angleTo(vB2);
+          const pts2=[];
+          const q2=new THREE.Quaternion();
+          for(let k=0;k<=36;k++){q2.setFromAxisAngle(ax2,ang2*(k/36));pts2.push(vA2.clone().applyQuaternion(q2).multiplyScalar(0.75));}
+          const arcCurve=new THREE.CatmullRomCurve3(pts2);
+          const arcGeo=new THREE.TubeGeometry(arcCurve,36,0.04,8,false);
+          const arcCol=parseInt(cols[pi].replace('#',''),16);
+          scene.add(new THREE.Mesh(arcGeo,new THREE.MeshPhongMaterial({color:arcCol,emissive:arcCol,emissiveIntensity:0.7,transparent:true,opacity:0.9})));
+          // Bold label sprite
+          const lW=180,lH=64;
+          const lc=document.createElement('canvas');lc.width=lW;lc.height=lH;
+          const lx=lc.getContext('2d');
+          const lr=lH/2;
+          lx.beginPath();lx.moveTo(lr,0);lx.lineTo(lW-lr,0);lx.quadraticCurveTo(lW,0,lW,lr);lx.quadraticCurveTo(lW,lH,lW-lr,lH);lx.lineTo(lr,lH);lx.quadraticCurveTo(0,lH,0,lr);lx.quadraticCurveTo(0,0,lr,0);lx.closePath();
+          lx.fillStyle='rgba(5,7,26,0.8)';lx.fill();
+          lx.strokeStyle=cols[pi];lx.lineWidth=3;lx.stroke();
+          lx.font='bold 32px Orbitron,Arial,sans-serif';lx.textAlign='center';lx.textBaseline='middle';
+          lx.strokeStyle='rgba(0,0,0,0.8)';lx.lineWidth=5;lx.strokeText(labels[pi],lW/2,lH/2);
+          lx.fillStyle=cols[pi];lx.fillText(labels[pi],lW/2,lH/2);
+          const ltex=new THREE.CanvasTexture(lc);
+          const lspr=new THREE.Sprite(new THREE.SpriteMaterial({map:ltex,transparent:true,depthTest:false}));
+          lspr.scale.set(1.6,0.57,1);
+          lspr.position.copy(vA2.clone().add(vB2).normalize().multiplyScalar(2.3));
+          scene.add(lspr);
+        });
+      }
+
+      miniData.push({renderer,scene,camera});
+    });
+
+    // Start the shared render loop
+    animateMini();
+  }, 120); // 120ms is plenty for the browser to lay out the grid
+}
+
+function animateMini(){
+  requestAnimationFrame(animateMini);
+  miniAngle+=0.007;
+  miniData.forEach(({renderer,scene,camera})=>{
+    camera.position.x=Math.sin(miniAngle)*7;
+    camera.position.z=Math.cos(miniAngle)*7;
+    camera.position.y=1.5;
+    camera.lookAt(0,0,0);
+    renderer.render(scene,camera);
+  });
+}
+
+buildIntroCards();
+
+// ══════════════════════════════════════════
+// SECTION 2: MAIN MOLECULE VIEWER
+// ══════════════════════════════════════════
+let molReady=false;
+let molRenderer,molScene,molCamera,molGroup;
+let isDragging=false,lastX=0,lastY=0;
+let curMol=null,revealed={dip:false,pol:false};
+
+function buildMolPills(){
+  const wrap=document.getElementById('molPills');
+  MOLS.forEach((m,i)=>{
+    const btn=document.createElement('button');
+    btn.className='mol-pill'+(i===0?' active':'');
+    btn.textContent=m.lbl;
+    btn.addEventListener('click',()=>{
+      document.querySelectorAll('.mol-pill').forEach(p=>p.classList.remove('active'));
+      btn.classList.add('active');
+      loadMolecule(m);
+    });
+    wrap.appendChild(btn);
+  });
+}
+
+function initMolViewer(){
+  molReady=true;
+  const cvs=document.getElementById('molCanvas');
+  const box=cvs.parentElement;
+  const W=box.clientWidth;
+  const H=box.clientHeight;
+
+  molRenderer=new THREE.WebGLRenderer({canvas:cvs,antialias:true});
+  molRenderer.setSize(W,H);
+  molRenderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  molRenderer.setClearColor(0x252d52,1);
+
+  molScene=new THREE.Scene();
+  molCamera=new THREE.PerspectiveCamera(44,W/H,0.1,100);
+  molCamera.position.set(0,2,8.5);
+  molCamera.lookAt(0,0,0);
+
+  molScene.add(new THREE.AmbientLight(0xffffff,0.5));
+  const d1=new THREE.DirectionalLight(0xffffff,1.0); d1.position.set(5,8,5); molScene.add(d1);
+  const d2=new THREE.DirectionalLight(0x6366f1,0.38); d2.position.set(-5,-3,-5); molScene.add(d2);
+
+  molGroup=new THREE.Group();
+  molScene.add(molGroup);
+
+  // Mouse drag
+  cvs.addEventListener('mousedown',e=>{isDragging=true;lastX=e.clientX;lastY=e.clientY;});
+  window.addEventListener('mouseup',()=>isDragging=false);
+  window.addEventListener('mousemove',e=>{
+    if(!isDragging)return;
+    molGroup.rotation.y+=(e.clientX-lastX)*0.011;
+    molGroup.rotation.x+=(e.clientY-lastY)*0.011;
+    lastX=e.clientX;lastY=e.clientY;
+  });
+  // Touch drag
+  cvs.addEventListener('touchstart',e=>{isDragging=true;lastX=e.touches[0].clientX;lastY=e.touches[0].clientY;},{passive:true});
+  window.addEventListener('touchend',()=>isDragging=false);
+  window.addEventListener('touchmove',e=>{
+    if(!isDragging)return;
+    molGroup.rotation.y+=(e.touches[0].clientX-lastX)*0.013;
+    molGroup.rotation.x+=(e.touches[0].clientY-lastY)*0.013;
+    lastX=e.touches[0].clientX;lastY=e.touches[0].clientY;
+  },{passive:true});
+  // Zoom
+  cvs.addEventListener('wheel',e=>{
+    molCamera.position.z=Math.max(3.5,Math.min(16,molCamera.position.z+e.deltaY*0.01));
+  },{passive:true});
+
+  buildMolPills();
+  loadMolecule(MOLS[0]);
+  animateMol();
+}
+
+// ── Angle arc helpers ──────────────────────────────────────────────────────
+// Uses TubeGeometry along a CatmullRomCurve so arcs are thick and visible
+
+function buildArcCurve(vA, vB, radius, segments=48){
+  const axis=vA.clone().cross(vB);
+  if(axis.lengthSq()<1e-6) axis.set(0,1,0);
+  axis.normalize();
+  const angle=vA.angleTo(vB);
+  const pts=[];
+  const q=new THREE.Quaternion();
+  for(let i=0;i<=segments;i++){
+    q.setFromAxisAngle(axis, angle*(i/segments));
+    pts.push(vA.clone().applyQuaternion(q).multiplyScalar(radius));
+  }
+  return new THREE.CatmullRomCurve3(pts);
+}
+
+function makeThickArc(vA, vB, radius, colorHex){
+  const curve=buildArcCurve(vA, vB, radius);
+  const geo=new THREE.TubeGeometry(curve, 48, 0.055, 8, false);
+  const mat=new THREE.MeshPhongMaterial({
+    color: colorHex, emissive: colorHex, emissiveIntensity: 0.6,
+    transparent: true, opacity: 0.92, shininess: 60
+  });
+  return new THREE.Mesh(geo, mat);
+}
+
+function makeAngleLabel(text, pos3d, colorHex){
+  // Large canvas with dark pill background + thick white stroke + bold text
+  const W=220, H=80;
+  const canvas=document.createElement('canvas');
+  canvas.width=W; canvas.height=H;
+  const ctx=canvas.getContext('2d');
+
+  // Dark pill background
+  const r=H/2;
+  ctx.beginPath();
+  ctx.moveTo(r,0); ctx.lineTo(W-r,0);
+  ctx.quadraticCurveTo(W,0,W,r);
+  ctx.quadraticCurveTo(W,H,W-r,H);
+  ctx.lineTo(r,H);
+  ctx.quadraticCurveTo(0,H,0,r);
+  ctx.quadraticCurveTo(0,0,r,0);
+  ctx.closePath();
+  ctx.fillStyle='rgba(5,7,26,0.82)';
+  ctx.fill();
+  // Coloured border
+  ctx.strokeStyle=colorHex;
+  ctx.lineWidth=4;
+  ctx.stroke();
+
+  // White stroke outline on text for max readability
+  ctx.font='bold 38px Orbitron,Arial,sans-serif';
+  ctx.textAlign='center';
+  ctx.textBaseline='middle';
+  ctx.strokeStyle='rgba(0,0,0,0.9)';
+  ctx.lineWidth=6;
+  ctx.strokeText(text, W/2, H/2);
+  // Coloured fill
+  ctx.fillStyle=colorHex;
+  ctx.fillText(text, W/2, H/2);
+
+  const tex=new THREE.CanvasTexture(canvas);
+  tex.needsUpdate=true;
+  const mat=new THREE.SpriteMaterial({map:tex, transparent:true, depthTest:false, sizeAttenuation:true});
+  const sprite=new THREE.Sprite(mat);
+  sprite.scale.set(2.4, 0.88, 1);
+  sprite.position.copy(pos3d);
+  return sprite;
+}
+
+// Angle arc definitions per geometry
+// Each entry: [posIdx_A, posIdx_B, 'angleText', colorHex]
+const ANGLE_ARCS={
+  linear:           [[0,1,'180°','#22d3ee']],
+  trigonal_planar:  [[0,1,'120°','#c084fc'],[1,2,'120°','#c084fc']],
+  tetrahedral:      [[0,1,'109.5°','#4ade80'],[2,3,'109.5°','#4ade80']],
+  trig_pyramidal:   [[0,1,'107°','#fbbf24'],[1,2,'107°','#fbbf24']],
+  bent:             [[0,1,'104.5°','#fb923c']],
+  trig_bipyramidal: [[0,1,'120°','#f472b6'],[1,2,'120°','#f472b6'],[0,3,'90°','#22d3ee']],
+  octahedral:       [[0,1,'90°','#22d3ee'],[2,3,'90°','#22d3ee'],[0,4,'90°','#22d3ee']],
+  square_planar:    [[0,1,'90°','#a78bfa'],[1,2,'90°','#a78bfa']],
+  see_saw:          [[0,1,'173°','#34d399'],[0,3,'90°','#22d3ee']]
+};
+
+function addAngleArcs(geom){
+  const sets=ANGLE_ARCS[geom];
+  if(!sets) return;
+  const positions=GPOS[geom];
+  const usedLabels=new Set();
+
+  // Outer atoms sit at ~2 units from centre; central atom radius ~0.56
+  // Arc drawn at 1.0 — safely between central atom surface (0.56) and bond midpoint (~1.0)
+  const arcR=1.0;
+
+  sets.forEach(([i,j,deg,col])=>{
+    const vA=new THREE.Vector3(...positions[i]).normalize();
+    const vB=new THREE.Vector3(...positions[j]).normalize();
+    const colInt=parseInt(col.replace('#',''),16);
+    molGroup.add(makeThickArc(vA, vB, arcR, colInt));
+
+    if(!usedLabels.has(deg)){
+      usedLabels.add(deg);
+      // Bisector direction between the two bond vectors
+      const bisector=vA.clone().add(vB).normalize();
+      // Push label out far enough to clear both the arc AND the outer atom sphere (~0.42r at ~2 units)
+      // Outer atom surface is at ~2 - 0.42 = 1.58 units along its bond direction.
+      // Bisector is not the bond direction so we go to 2.6 to comfortably clear everything
+      const labelDist=2.6;
+      const labelPos=bisector.multiplyScalar(labelDist);
+      molGroup.add(makeAngleLabel(deg, labelPos, col));
+    }
+  });
+}
+
+function loadMolecule(mol){
+  curMol=mol;
+  revealed={dip:false,pol:false};
+  while(molGroup.children.length) molGroup.remove(molGroup.children[0]);
+
+  const c1=parseInt(mol.c[0].replace('#',''),16);
+  const c2=parseInt(mol.c[1].replace('#',''),16);
+
+  // Central atom
+  const cAtom=new THREE.Mesh(new THREE.SphereGeometry(0.56,48,48),
+    new THREE.MeshPhongMaterial({color:c1,emissive:c1,emissiveIntensity:0.24,shininess:110}));
+  molGroup.add(cAtom);
+  // Soft glow shell
+  molGroup.add(new THREE.Mesh(new THREE.SphereGeometry(0.72,32,32),
+    new THREE.MeshPhongMaterial({color:c1,transparent:true,opacity:0.06,side:THREE.BackSide})));
+
+  const positions=GPOS[mol.geom]||GPOS.tetrahedral;
+  positions.forEach(p=>{
+    const sm=new THREE.Mesh(new THREE.SphereGeometry(0.42,48,48),
+      new THREE.MeshPhongMaterial({color:c2,emissive:c2,emissiveIntensity:0.09,shininess:80}));
+    sm.position.set(...p);
+    molGroup.add(sm);
+    const dir=new THREE.Vector3(...p);
+    const len=dir.length();
+    const bond=new THREE.Mesh(new THREE.CylinderGeometry(0.085,0.085,len-0.88,16),
+      new THREE.MeshPhongMaterial({color:0x2d3748,shininess:35}));
+    bond.position.copy(dir.clone().multiplyScalar(0.5));
+    bond.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),dir.clone().normalize());
+    molGroup.add(bond);
+  });
+
+  // Lone pairs
+  if(mol.lone>0){
+    (LONE_POS[mol.geom]||[]).slice(0,mol.lone).forEach(p=>{
+      const lp=new THREE.Mesh(new THREE.SphereGeometry(0.26,32,32),
+        new THREE.MeshPhongMaterial({color:0xfbbf24,transparent:true,opacity:0.38}));
+      lp.position.set(...p);
+      molGroup.add(lp);
+    });
+  }
+
+  // Draw angle arcs + labels
+  addAngleArcs(mol.geom);
+
+  molGroup.rotation.set(0.35,0.5,0);
+
+  document.getElementById('iName').textContent=mol.name;
+  document.getElementById('iShape').textContent=mol.shape;
+  document.getElementById('iAngle').textContent=mol.angle;
+  document.getElementById('iLone').textContent=mol.lone;
+  document.getElementById('iTotal').textContent=mol.total;
+
+  document.getElementById('dipTile').classList.remove('shown');
+  document.getElementById('polTile').classList.remove('shown');
+  document.getElementById('iDip').textContent='Tap to reveal!';
+  document.getElementById('iPol').textContent='Tap to reveal!';
+}
+
+function revealTile(type){
+  if(revealed[type]) return;
+  revealed[type]=true;
+  if(type==='dip'){
+    document.getElementById('iDip').textContent=curMol.dip;
+    document.getElementById('dipTile').classList.add('shown');
+  } else {
+    document.getElementById('iPol').textContent=curMol.pol;
+    document.getElementById('polTile').classList.add('shown');
+  }
+}
+
+function animateMol(){
+  requestAnimationFrame(animateMol);
+  if(!isDragging&&molGroup) molGroup.rotation.y+=0.004;
+  if(molRenderer) molRenderer.render(molScene,molCamera);
+}
+
+// ══════════════════════════════════════════
+// SECTION 3: QUIZ
+// ══════════════════════════════════════════
+const QUIZ=[
+  {mol:'F₂O',  q:'What is the shape of F₂O?',
+   opts:['Linear','Non-linear (bent)','Trigonal planar','Tetrahedral'],ans:1,
+   exp:'F₂O has 2 bonding pairs + 2 lone pairs on O — same as H₂O → bent/non-linear shape.'},
+  {mol:'CS₂',  q:'What is the bond angle in CS₂?',
+   opts:['104.5°','120°','180°','109.5°'],ans:2,
+   exp:'CS₂ is analogous to CO₂ — linear with 2 double bonds and no lone pairs → 180°.'},
+  {mol:'H₃O⁺', q:'What is the shape of H₃O⁺?',
+   opts:['Trigonal planar','Tetrahedral','Trigonal pyramidal','Linear'],ans:2,
+   exp:'H₃O⁺ has 3 bonding pairs + 1 lone pair, exactly like NH₃ → trigonal pyramidal.'},
+  {mol:'NH₄⁺', q:'What is the bond angle in NH₄⁺?',
+   opts:['107°','120°','90°','109.5°'],ans:3,
+   exp:'NH₄⁺ has 4 bonding pairs, 0 lone pairs — perfect tetrahedral geometry → 109.5°.'},
+  {mol:'NH₂⁻', q:'What is the shape of NH₂⁻?',
+   opts:['Non-linear (bent)','Linear','Trigonal pyramidal','Trigonal planar'],ans:0,
+   exp:'NH₂⁻ has 2 bonding pairs + 2 lone pairs on N — analogous to H₂O → bent/non-linear.'},
+  {mol:'SF₄',  q:'What is the shape of SF₄?',
+   opts:['Tetrahedral','Square planar','See-saw','Octahedral'],ans:2,
+   exp:'SF₄ has 4 bonding + 1 lone pair (5 total) — derived from trig. bipyramidal with the LP equatorial → see-saw.'},
+  {mol:'XeF₄', q:'What is the shape of XeF₄?',
+   opts:['Tetrahedral','Square planar','Octahedral','See-saw'],ans:1,
+   exp:'XeF₄ has 4 bonding + 2 lone pairs (6 total) — LPs take opposite axial positions → square planar.'},
+  {mol:'ClF₆⁺',q:'What is the shape of ClF₆⁺?',
+   opts:['Octahedral','Trigonal bipyramidal','Square planar','Pentagonal bipyramidal'],ans:0,
+   exp:'ClF₆⁺ has 6 bonding pairs, 0 lone pairs (Cl⁺) — 6 pairs around A → octahedral.'}
+];
+
+let qState=new Array(8).fill(null), qScore=0;
+
+function buildProgPills(){
+  const d=document.getElementById('progPills');d.innerHTML='';
+  for(let i=0;i<8;i++){
+    const p=document.createElement('div');
+    p.className='ppill'+(qState[i]===null?'':(qState[i]===QUIZ[i].ans?' c':' w'));
+    d.appendChild(p);
+  }
+}
+
+// ── Quiz 3D molecule data ─────────────────────────────────────────────────
+// Maps each quiz molecule label to geometry + colours for the inline viewer
+const QUIZ_MOL3D={
+  'F₂O':      {geom:'bent',          lone:2, c:['#f87171','#f1f5f9'], loneC:0xfbbf24},
+  'CS₂':      {geom:'linear',        lone:0, c:['#94a3b8','#f59e0b'], loneC:null},
+  'H₃O⁺':    {geom:'trig_pyramidal', lone:1, c:['#f87171','#f1f5f9'], loneC:0xfbbf24},
+  'NH₄⁺':    {geom:'tetrahedral',    lone:0, c:['#818cf8','#f1f5f9'], loneC:null},
+  'NH₂⁻':    {geom:'bent',           lone:2, c:['#818cf8','#f1f5f9'], loneC:0xfbbf24},
+  'SF₄':      {geom:'see_saw',        lone:1, c:['#fbbf24','#22d3ee'], loneC:0xfbbf24},
+  'XeF₄':    {geom:'square_planar',  lone:2, c:['#a78bfa','#22d3ee'], loneC:0xfbbf24},
+  'ClF₆⁺':   {geom:'octahedral',     lone:0, c:['#34d399','#22d3ee'], loneC:null}
+};
+
+// Extra geometry for quiz-only shapes
+const GPOS_EXTRA={
+  see_saw:[[2,0,0],[-2,0,0],[0.9,0,1.56],[0,2.0,0]]
+};
+const LONE_POS_EXTRA={
+  see_saw:[[0,-1.8,0]],
+  bent:   [[0,-1.65,0],[0,-1.5,1.1]]
+};
+
+// Track active quiz viewers so we can animate them
+const quizViewers=[];
+let quizViewerAnimStarted=false;
+
+function animateQuizViewers(){
+  requestAnimationFrame(animateQuizViewers);
+  quizViewers.forEach(v=>{
+    if(!v.isDrag) v.group.rotation.y+=0.005;
+    v.renderer.render(v.scene, v.camera);
+  });
+}
+
+function build3DViewerForQuiz(containerId, molKey){
+  const wrap=document.getElementById(containerId);
+  if(!wrap||wrap.dataset.built) return;
+  wrap.dataset.built='1';
+
+  const data=QUIZ_MOL3D[molKey];
+  if(!data){ wrap.innerHTML='<p style="color:var(--dim);padding:1rem;text-align:center;font-size:.8rem;">3D view not available</p>'; return; }
+
+  const W=wrap.clientWidth||500, H=280;
+  const renderer=new THREE.WebGLRenderer({antialias:true});
+  renderer.setSize(W,H);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  renderer.setClearColor(0x1a1f3e,1);
+  wrap.appendChild(renderer.domElement);
+
+  const scene=new THREE.Scene();
+  const camera=new THREE.PerspectiveCamera(44,W/H,0.1,100);
+  camera.position.set(0,2,8.5);
+  camera.lookAt(0,0,0);
+
+  scene.add(new THREE.AmbientLight(0xffffff,0.5));
+  const d1=new THREE.DirectionalLight(0xffffff,1.0); d1.position.set(5,8,5); scene.add(d1);
+  const d2=new THREE.DirectionalLight(0x6366f1,0.38); d2.position.set(-5,-3,-5); scene.add(d2);
+
+  const group=new THREE.Group(); scene.add(group);
+
+  const c1=parseInt(data.c[0].replace('#',''),16);
+  const c2=parseInt(data.c[1].replace('#',''),16);
+
+  // Central atom
+  group.add(new THREE.Mesh(new THREE.SphereGeometry(0.56,48,48),
+    new THREE.MeshPhongMaterial({color:c1,emissive:c1,emissiveIntensity:0.24,shininess:110})));
+  group.add(new THREE.Mesh(new THREE.SphereGeometry(0.72,32,32),
+    new THREE.MeshPhongMaterial({color:c1,transparent:true,opacity:0.06,side:THREE.BackSide})));
+
+  const pos=(GPOS[data.geom]||GPOS_EXTRA[data.geom]||GPOS.tetrahedral);
+  pos.forEach(p=>{
+    const sm=new THREE.Mesh(new THREE.SphereGeometry(0.42,48,48),
+      new THREE.MeshPhongMaterial({color:c2,emissive:c2,emissiveIntensity:0.09,shininess:80}));
+    sm.position.set(...p); group.add(sm);
+    const dir=new THREE.Vector3(...p), len=dir.length();
+    const bond=new THREE.Mesh(new THREE.CylinderGeometry(0.085,0.085,len-0.88,16),
+      new THREE.MeshPhongMaterial({color:0x2d3748,shininess:35}));
+    bond.position.copy(dir.clone().multiplyScalar(0.5));
+    bond.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),dir.clone().normalize());
+    group.add(bond);
+  });
+
+  // Lone pairs
+  if(data.lone>0){
+    const lonePos=(LONE_POS[data.geom]||LONE_POS_EXTRA[data.geom]||[]);
+    lonePos.slice(0,data.lone).forEach(p=>{
+      const lp=new THREE.Mesh(new THREE.SphereGeometry(0.26,32,32),
+        new THREE.MeshPhongMaterial({color:data.loneC||0xfbbf24,transparent:true,opacity:0.45}));
+      lp.position.set(...p); group.add(lp);
+    });
+  }
+
+  // Angle arcs
+  const arcKey=data.geom;
+  const arcSets=ANGLE_ARCS[arcKey];
+  const arcPositions=GPOS[arcKey]||GPOS_EXTRA[arcKey];
+  if(arcSets&&arcPositions){
+    const usedL=new Set();
+    arcSets.forEach(([i,j,deg,col])=>{
+      const vA=new THREE.Vector3(...arcPositions[i]).normalize();
+      const vB=new THREE.Vector3(...arcPositions[j]).normalize();
+      group.add(makeThickArc(vA,vB,1.0,parseInt(col.replace('#',''),16)));
+      if(!usedL.has(deg)){
+        usedL.add(deg);
+        const labelPos=vA.clone().add(vB).normalize().multiplyScalar(2.6);
+        group.add(makeAngleLabel(deg,labelPos,col));
+      }
+    });
+  }
+
+  group.rotation.set(0.35,0.5,0);
+
+  // Drag support
+  let isDrag=false, lx=0, ly=0;
+  renderer.domElement.addEventListener('mousedown',e=>{isDrag=true;lx=e.clientX;ly=e.clientY;});
+  window.addEventListener('mouseup',()=>isDrag=false);
+  window.addEventListener('mousemove',e=>{
+    if(!isDrag)return;
+    group.rotation.y+=(e.clientX-lx)*0.012;
+    group.rotation.x+=(e.clientY-ly)*0.012;
+    lx=e.clientX;ly=e.clientY;
+  });
+  renderer.domElement.addEventListener('touchstart',e=>{isDrag=true;lx=e.touches[0].clientX;ly=e.touches[0].clientY;},{passive:true});
+  window.addEventListener('touchend',()=>isDrag=false);
+  window.addEventListener('touchmove',e=>{
+    if(!isDrag)return;
+    group.rotation.y+=(e.touches[0].clientX-lx)*0.014;
+    group.rotation.x+=(e.touches[0].clientY-ly)*0.014;
+    lx=e.touches[0].clientX;ly=e.touches[0].clientY;
+  },{passive:true});
+  renderer.domElement.addEventListener('wheel',e=>{
+    camera.position.z=Math.max(3.5,Math.min(14,camera.position.z+e.deltaY*0.01));
+  },{passive:true});
+
+  quizViewers.push({renderer,scene,camera,group,isDrag:false});
+  if(!quizViewerAnimStarted){ quizViewerAnimStarted=true; animateQuizViewers(); }
+}
+
+function toggle3DViewer(qi){
+  const btn=document.getElementById('v3btn'+qi);
+  const wrap=document.getElementById('v3wrap'+qi);
+  const inner=document.getElementById('v3inner'+qi);
+  const isOpen=wrap.classList.contains('open');
+  if(!isOpen){
+    wrap.classList.add('open');
+    btn.classList.add('open');
+    btn.innerHTML='⬆ Hide 3D View';
+    // Build the viewer lazily on first open
+    build3DViewerForQuiz('v3inner'+qi, QUIZ[qi].mol);
+  } else {
+    wrap.classList.remove('open');
+    btn.classList.remove('open');
+    btn.innerHTML='⚛️ View 3D Molecule';
+  }
+}
+
+function buildQuiz(){
+  const box=document.getElementById('quizBox');box.innerHTML='';
+  QUIZ.forEach((q,qi)=>{
+    const card=document.createElement('div');
+    card.className='q-card';card.id='qc'+qi;
+    card.style.animationDelay=(qi*0.06)+'s';
+    card.innerHTML=`
+      <div class="q-header">
+        <span class="q-badge">Q${qi+1} of 8</span>
+        <span class="q-mol">${q.mol}</span>
+      </div>
+      <div class="q-text">${q.q}</div>
+      <div class="opts" id="opts${qi}">
+        ${q.opts.map((o,oi)=>`
+          <button class="opt" id="o${qi}_${oi}" onclick="pickAnswer(${qi},${oi})">
+            <span class="opt-ltr">${['A','B','C','D'][oi]}</span>
+            <span>${o}</span>
+          </button>`).join('')}
+      </div>
+      <div class="q-fb" id="fb${qi}"></div>
+      <button class="view3d-btn" id="v3btn${qi}" onclick="toggle3DViewer(${qi})" style="display:none;">⚛️ View 3D Molecule</button>
+      <div class="q-viewer-wrap" id="v3wrap${qi}">
+        <div class="q-viewer-inner" id="v3inner${qi}">
+          <div class="q-viewer-hint">⟳ Drag to rotate · Scroll to zoom</div>
+        </div>
+      </div>`;
+    box.appendChild(card);
+  });
+}
+
+function pickAnswer(qi,oi){
+  if(qState[qi]!==null) return;
+  qState[qi]=oi;
+  const q=QUIZ[qi];
+  const correct=(oi===q.ans);
+
+  for(let i=0;i<4;i++){
+    const b=document.getElementById('o'+qi+'_'+i);
+    b.disabled=true;
+    if(i===q.ans) b.classList.add((correct&&i===oi)?'correct':'reveal');
+  }
+  if(!correct) document.getElementById('o'+qi+'_'+oi).classList.add('wrong');
+  document.getElementById('qc'+qi).classList.add(correct?'correct':'wrong');
+
+  const fb=document.getElementById('fb'+qi);
+  fb.textContent=(correct?'✅ Correct! ':'❌ Not quite. ')+q.exp;
+  fb.className='q-fb show '+(correct?'correct':'wrong');
+
+  if(correct){ qScore++; document.getElementById('sScore').textContent=qScore; }
+
+  // Show the 3D viewer button after answering
+  document.getElementById('v3btn'+qi).style.display='flex';
+
+  const answered=qState.filter(s=>s!==null).length;
+  document.getElementById('sAns').textContent=answered+'/8';
+  buildProgPills();
+  if(answered===8) setTimeout(showFinal,650);
+}
+
+function showFinal(){
+  const fs=document.getElementById('finalScr');
+  const pct=qScore/8;
+  const stars=pct>=0.875?'⭐⭐⭐':pct>=0.625?'⭐⭐':'⭐';
+  const msgs=['Keep practising — revisit the 3D Lab and shape cards!',
+              'Good effort! Review the sections above and try again.',
+              'Great work! You have solid VSEPR knowledge.',
+              'Perfect score! You are a VSEPR master! 🏆'];
+  const mi=qScore<=2?0:qScore<=4?1:qScore<=6?2:3;
+  fs.innerHTML=`
+    <div class="stars">${stars}</div>
+    <div class="final-score">${qScore}/8</div>
+    <div class="final-title">${qScore===8?'PERFECT SCORE! 🏆':qScore>=6?'Excellent Work!':qScore>=4?'Good Job!':'Keep Practising!'}</div>
+    <div class="final-msg">${msgs[mi]}</div>
+    <button class="btn-main" onclick="resetQuiz()">↺ &nbsp;Try Again</button>`;
+  fs.classList.add('show');
+  fs.scrollIntoView({behavior:'smooth',block:'center'});
+  if(qScore>=6) launchConfetti();
+}
+
+function resetQuiz(){
+  qState=new Array(8).fill(null);
+  document.getElementById('sScore').textContent='0';
+  document.getElementById('sAns').textContent='0/8';
+  document.getElementById('finalScr').classList.remove('show');
+  buildProgPills();
+  buildQuiz();
+  window.scrollTo({top:document.getElementById('assessment').offsetTop-76,behavior:'smooth'});
+}
+
+buildProgPills();
+buildQuiz();
+
+// ══════════════════════════════════════════
+// CONFETTI
+// ══════════════════════════════════════════
+function launchConfetti(){
+  const cols=['#6366f1','#22d3ee','#f472b6','#fbbf24','#4ade80','#f87171','#fb923c'];
+  for(let i=0;i<80;i++){
+    setTimeout(()=>{
+      const el=document.createElement('div');
+      el.className='cfp';
+      const size=Math.random()*7+4;
+      el.style.cssText=`left:${Math.random()*100}vw;top:0;width:${size}px;height:${size}px;`+
+        `background:${cols[i%cols.length]};border-radius:${Math.random()>.5?'50%':'2px'};`+
+        `animation-duration:${2+Math.random()*2}s;animation-delay:${Math.random()*0.6}s;`;
+      document.body.appendChild(el);
+      setTimeout(()=>el.remove(),3800);
+    },i*28);
+  }
+}
+</script>
+</body>
+</html>
